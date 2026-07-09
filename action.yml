@@ -30,6 +30,8 @@ outputs:
     description: Total API call count in the report.
   unmocked-count:
     description: Count of unmocked API calls.
+  ambiguous-count:
+    description: Count of API calls with an unresolved HTTP method whose path matches a handler.
   stale-count:
     description: Count of stale handlers.
   covered-handlers:
