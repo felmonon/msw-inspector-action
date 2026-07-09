@@ -1496,36 +1496,36 @@ var require_diagnostics = __commonJS({
       const debuglog = fetchDebuglog.enabled ? fetchDebuglog : undiciDebugLog;
       diagnosticsChannel.channel("undici:client:beforeConnect").subscribe((evt) => {
         const {
-          connectParams: { version, protocol, port, host }
+          connectParams: { version: version2, protocol, port, host }
         } = evt;
         debuglog(
           "connecting to %s using %s%s",
           `${host}${port ? `:${port}` : ""}`,
           protocol,
-          version
+          version2
         );
       });
       diagnosticsChannel.channel("undici:client:connected").subscribe((evt) => {
         const {
-          connectParams: { version, protocol, port, host }
+          connectParams: { version: version2, protocol, port, host }
         } = evt;
         debuglog(
           "connected to %s using %s%s",
           `${host}${port ? `:${port}` : ""}`,
           protocol,
-          version
+          version2
         );
       });
       diagnosticsChannel.channel("undici:client:connectError").subscribe((evt) => {
         const {
-          connectParams: { version, protocol, port, host },
+          connectParams: { version: version2, protocol, port, host },
           error: error2
         } = evt;
         debuglog(
           "connection to %s using %s%s errored - %s",
           `${host}${port ? `:${port}` : ""}`,
           protocol,
-          version,
+          version2,
           error2.message
         );
       });
@@ -1574,31 +1574,31 @@ var require_diagnostics = __commonJS({
         const debuglog = undiciDebugLog.enabled ? undiciDebugLog : websocketDebuglog;
         diagnosticsChannel.channel("undici:client:beforeConnect").subscribe((evt) => {
           const {
-            connectParams: { version, protocol, port, host }
+            connectParams: { version: version2, protocol, port, host }
           } = evt;
           debuglog(
             "connecting to %s%s using %s%s",
             host,
             port ? `:${port}` : "",
             protocol,
-            version
+            version2
           );
         });
         diagnosticsChannel.channel("undici:client:connected").subscribe((evt) => {
           const {
-            connectParams: { version, protocol, port, host }
+            connectParams: { version: version2, protocol, port, host }
           } = evt;
           debuglog(
             "connected to %s%s using %s%s",
             host,
             port ? `:${port}` : "",
             protocol,
-            version
+            version2
           );
         });
         diagnosticsChannel.channel("undici:client:connectError").subscribe((evt) => {
           const {
-            connectParams: { version, protocol, port, host },
+            connectParams: { version: version2, protocol, port, host },
             error: error2
           } = evt;
           debuglog(
@@ -1606,7 +1606,7 @@ var require_diagnostics = __commonJS({
             host,
             port ? `:${port}` : "",
             protocol,
-            version,
+            version2,
             error2.message
           );
         });
@@ -23916,6 +23916,9 @@ function getOctokit(token, options, ...additionalPlugins) {
   return new GitHubWithPlugins(getOctokitOptions(token, options));
 }
 
+// package.json
+var version = "0.3.0";
+
 // src/github-action/index.ts
 var COMMENT_MARKER = "<!-- msw-inspector-comment -->";
 var DEFAULT_COMMENT_TITLE = "MSW mock coverage";
@@ -23928,60 +23931,72 @@ async function readCoverageReport(summaryFile) {
   }
   return parsed;
 }
+var REPO_URL = "https://github.com/felmonon/msw-inspector";
+function verdictEmoji(report) {
+  if (report.summary.unmockedCalls > 0) {
+    return "\u{1F534}";
+  }
+  if ((report.summary.ambiguousCalls ?? 0) > 0 || report.summary.staleHandlers > 0) {
+    return "\u{1F7E1}";
+  }
+  return "\u{1F7E2}";
+}
+function coverageBar(percentage) {
+  const filled = Math.max(0, Math.min(10, Math.round(percentage / 10)));
+  return `\`${"\u25B0".repeat(filled)}${"\u25B1".repeat(10 - filled)}\` ${percentage}%`;
+}
+function footer() {
+  return `\u{1F6E1} [msw-inspector](${REPO_URL}) v${version} \xB7 [docs](${REPO_URL}#readme) \xB7 [report an issue](${REPO_URL}/issues)`;
+}
 function renderJobSummary(report) {
   const lines = [];
-  lines.push("## MSW mock coverage");
+  lines.push(`## ${verdictEmoji(report)} MSW mock coverage: ${report.summary.percentage}% (${report.summary.mockedCalls}/${report.summary.totalCalls})`);
   lines.push("");
-  lines.push("| Metric | Value |");
-  lines.push("| --- | ---: |");
-  lines.push(`| Coverage | ${report.summary.percentage}% |`);
-  lines.push(`| Mocked API calls | ${report.summary.mockedCalls} / ${report.summary.totalCalls} |`);
-  lines.push(`| Used handlers | ${report.summary.usedHandlers} / ${report.summary.totalHandlers} |`);
-  lines.push(`| Unmocked API calls | ${report.summary.unmockedCalls} |`);
-  lines.push(`| Ambiguous API calls | ${report.summary.ambiguousCalls ?? 0} |`);
-  lines.push(`| Stale handlers | ${report.summary.staleHandlers} |`);
+  lines.push(coverageBar(report.summary.percentage));
+  lines.push("");
+  lines.push("| Unmocked | Ambiguous | Stale handlers | Handlers used |");
+  lines.push("| ---: | ---: | ---: | ---: |");
+  lines.push(`| ${report.summary.unmockedCalls} | ${report.summary.ambiguousCalls ?? 0} | ${report.summary.staleHandlers} | ${report.summary.usedHandlers}/${report.summary.totalHandlers} |`);
   if (report.unsupported.length > 0) {
     lines.push("");
     lines.push(`Unsupported patterns skipped: ${report.unsupported.length}`);
   }
+  lines.push("");
+  lines.push(footer());
   return `${lines.join("\n")}
 `;
 }
 function renderStickyComment(report, title = DEFAULT_COMMENT_TITLE, limit = DEFAULT_COMMENT_LIMIT) {
-  const unmocked = takeLabels(report.apiCalls, report.unmockedCallIds, formatApiCall, limit);
-  const ambiguous = takeLabels(report.apiCalls, report.ambiguousCallIds ?? [], formatApiCall, limit);
-  const stale = takeLabels(report.handlers, report.staleHandlerIds, formatHandler, limit);
-  const unsupported = report.unsupported.slice(0, limit).map(formatUnsupported);
   const lines = [];
   lines.push(COMMENT_MARKER);
-  lines.push(`## ${title}`);
+  lines.push(`## ${verdictEmoji(report)} ${title}: ${report.summary.percentage}% (${report.summary.mockedCalls}/${report.summary.totalCalls})`);
   lines.push("");
-  lines.push(`Coverage: **${report.summary.percentage}%** (${report.summary.mockedCalls}/${report.summary.totalCalls})`);
-  lines.push(`Handlers used: **${report.summary.usedHandlers}** / ${report.summary.totalHandlers}`);
-  lines.push(`Unmocked API calls: **${report.summary.unmockedCalls}**`);
-  lines.push(`Stale handlers: **${report.summary.staleHandlers}**`);
-  if (unmocked.length > 0) {
-    lines.push("");
-    lines.push("### Unmocked API calls");
-    lines.push(...unmocked.map((value) => `- ${value}`));
-  }
-  if (ambiguous.length > 0) {
-    lines.push("");
-    lines.push("### Ambiguous API calls");
-    lines.push(...ambiguous.map((value) => `- ${value}`));
-  }
-  if (stale.length > 0) {
-    lines.push("");
-    lines.push("### Stale handlers");
-    lines.push(...stale.map((value) => `- ${value}`));
-  }
-  if (unsupported.length > 0) {
-    lines.push("");
-    lines.push("### Unsupported patterns");
-    lines.push(...unsupported.map((value) => `- ${value}`));
-  }
+  lines.push(coverageBar(report.summary.percentage));
+  lines.push("");
+  lines.push("| Unmocked | Ambiguous | Stale handlers | Handlers used |");
+  lines.push("| ---: | ---: | ---: | ---: |");
+  lines.push(`| ${report.summary.unmockedCalls} | ${report.summary.ambiguousCalls ?? 0} | ${report.summary.staleHandlers} | ${report.summary.usedHandlers}/${report.summary.totalHandlers} |`);
+  lines.push(...detailsSection("Unmocked API calls", takeLabels(report.apiCalls, report.unmockedCallIds, formatApiCall, limit), report.unmockedCallIds.length));
+  lines.push(...detailsSection("Ambiguous API calls", takeLabels(report.apiCalls, report.ambiguousCallIds ?? [], formatApiCall, limit), (report.ambiguousCallIds ?? []).length));
+  lines.push(...detailsSection("Stale handlers", takeLabels(report.handlers, report.staleHandlerIds, formatHandler, limit), report.staleHandlerIds.length));
+  lines.push(...detailsSection("Unsupported patterns", report.unsupported.slice(0, limit).map(formatUnsupported), report.unsupported.length));
+  lines.push("");
+  lines.push("---");
+  lines.push(footer());
   return `${lines.join("\n")}
 `;
+}
+function detailsSection(title, items, total) {
+  if (items.length === 0) {
+    return [];
+  }
+  const lines = ["", "<details>", `<summary>${title} (${total})</summary>`, ""];
+  lines.push(...items.map((value) => `- ${value}`));
+  if (total > items.length) {
+    lines.push(`- \u2026 and ${total - items.length} more`);
+  }
+  lines.push("", "</details>");
+  return lines;
 }
 async function writeJobSummary(report) {
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
@@ -24080,13 +24095,13 @@ function takeLabels(items, ids, formatter, limit) {
   return ids.map((id) => byId.get(id)).filter((item) => Boolean(item)).slice(0, limit).map(formatter);
 }
 function formatHandler(handler2) {
-  return `${handler2.method} ${handler2.pattern.normalized}`;
+  return `\`${handler2.method} ${handler2.pattern.normalized}\` \u2014 ${handler2.location.filePath}:${handler2.location.line}`;
 }
 function formatApiCall(call) {
-  return `${call.method} ${call.pattern.normalized}`;
+  return `\`${call.method} ${call.pattern.normalized}\` \u2014 ${call.location.filePath}:${call.location.line}`;
 }
 function formatUnsupported(item) {
-  return `${item.kind}: ${item.expressionText} (${item.reason})`;
+  return `\`${item.expressionText}\` \u2014 ${item.location.filePath}:${item.location.line} (${item.reason})`;
 }
 function getId(item) {
   return item.id;
